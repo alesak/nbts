@@ -271,7 +271,7 @@ public class TSService {
         String path;
     }
 
-    static void addFiles(List<Pair<Indexable, Snapshot>> files, Context cntxt) {
+    static void addFiles(List<Pair<Indexable, Snapshot>> files, Context cntxt, boolean isOpening) {
         lock.lock();
         try {
             URL rootURL = cntxt.getRootURI();
@@ -294,7 +294,7 @@ public class TSService {
                 allFiles.put(fi.path, fi);
 
                 program.addFile(fi, item.second(), cntxt.checkForEditorModifications());
-                if (! cntxt.isAllFilesIndexing() && ! cntxt.checkForEditorModifications()) {
+                if (! isOpening && ! cntxt.checkForEditorModifications()) {
                     program.needCompileOnSave.add(fi.fileObject);
                 }
             }

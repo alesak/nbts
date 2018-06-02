@@ -37,9 +37,17 @@
  */
 package netbeanstypescript;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.net.URL;
+import static java.nio.charset.StandardCharsets.UTF_8;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.logging.Level;
 import java.util.prefs.Preferences;
 import org.netbeans.api.progress.ProgressHandle;
@@ -64,12 +72,14 @@ import org.openide.util.Pair;
  */
 public class TSIndexerFactory extends CustomIndexerFactory {
 
+    private final Set<String> openRoots = Collections.synchronizedSet(new HashSet<String>());
+
     @Override
     public boolean scanStarted(Context context) {
         if (! context.checkForEditorModifications()) {
             TSService.preIndex(context.getRootURI());
         }
-        return false;
+        return true;
     }
 
     @Override
@@ -82,19 +92,54 @@ public class TSIndexerFactory extends CustomIndexerFactory {
                 if (root == null) {
                     return;
                 }
+                boolean isOpening = openRoots.add(context.getRootURI().toString());
+                Set<String> extraPaths = new HashSet<>();
+                NB9_WORKAROUND: if (isOpening) {
+                    FileObject timestamps = context.getIndexFolder().getParent().getParent()
+                            .getFileObject("timestamps.properties");
+                    if (timestamps == null) {
+                        break NB9_WORKAROUND;
+                    }
+                    try (InputStream is = timestamps.getInputStream()) {
+                        BufferedReader br = new BufferedReader(new InputStreamReader(is, UTF_8));
+                        for (String line; (line = br.readLine()) != null; ) {
+                            int valuePos = line.lastIndexOf('=');
+                            if (valuePos >= 0) extraPaths.add(line.substring(0, valuePos));
+                        }
+                    } catch (IOException e) {
+                        TSService.log.log(Level.WARNING, "Could not read {0}: {1}",
+                                new Object[] { timestamps, e });
+                    }
+                }
                 List<Pair<Indexable, Snapshot>> snapshots = new ArrayList<>();
                 for (Indexable indxbl: files) {
+                    extraPaths.remove(indxbl.getRelativePath());
                     FileObject fo = root.getFileObject(indxbl.getRelativePath());
-                    if (fo == null) continue;
-                    if ("text/typescript".equals(FileUtil.getMIMEType(fo))) {
-                        snapshots.add(Pair.of(indxbl, Source.create(fo).createSnapshot()));
-                    } else if (fo.getNameExt().equals("tsconfig.json")) {
+                    if (relevant(fo)) {
+                        System.out.println("Indexing " + indxbl.getRelativePath());
                         snapshots.add(Pair.of(indxbl, Source.create(fo).createSnapshot()));
                     }
                 }
                 if (! snapshots.isEmpty()) {
-                    TSService.addFiles(snapshots, context);
+                    TSService.addFiles(snapshots, context, isOpening || context.isSupplementaryFilesIndexing());
                 }
+                List<URL> extraFileObjects = new ArrayList<>();
+                for (String extraPath: extraPaths) {
+                    FileObject fo = root.getFileObject(extraPath);
+                    if (relevant(fo)) {
+                        System.out.println("Forcing index of previously indexed file: " + extraPath);
+                        extraFileObjects.add(fo.toURL());
+                    }
+                }
+                if (! extraFileObjects.isEmpty()) {
+                    context.addSupplementaryFiles(context.getRootURI(), extraFileObjects);
+                }
+            }
+
+            private boolean relevant(FileObject fo) {
+                if (fo == null) return false;
+                String mime = FileUtil.getMIMEType(fo);
+                return "text/typescript".equals(mime) || "text/tsconfig+x-json".equals(mime);
             }
         };
     }
@@ -124,6 +169,7 @@ public class TSIndexerFactory extends CustomIndexerFactory {
     public void rootsRemoved(Iterable<? extends URL> removedRoots) {
         for (URL url: removedRoots) {
             TSService.removeProgram(url);
+            openRoots.remove(url.toString());
         }
     }
 
