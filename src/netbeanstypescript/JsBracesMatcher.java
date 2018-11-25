@@ -1,44 +1,22 @@
 /*
- * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
+ * Adapted from NetBeans 10.0; modified for nbts
  *
- * Copyright 2011 Oracle and/or its affiliates. All rights reserved.
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
- * Oracle and Java are registered trademarks of Oracle and/or its affiliates.
- * Other names may be trademarks of their respective owners.
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * The contents of this file are subject to the terms of either the GNU
- * General Public License Version 2 only ("GPL") or the Common
- * Development and Distribution License("CDDL") (collectively, the
- * "License"). You may not use this file except in compliance with the
- * License. You can obtain a copy of the License at
- * http://www.netbeans.org/cddl-gplv2.html
- * or nbbuild/licenses/CDDL-GPL-2-CP. See the License for the
- * specific language governing permissions and limitations under the
- * License.  When distributing the software, include this License Header
- * Notice in each file and include the License file at
- * nbbuild/licenses/CDDL-GPL-2-CP.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the GPL Version 2 section of the License file that
- * accompanied this code. If applicable, add the following below the
- * License Header, with the fields enclosed by brackets [] replaced by
- * your own identifying information:
- * "Portions Copyrighted [year] [name of copyright owner]"
- *
- * If you wish your version of this file to be governed by only the CDDL
- * or only the GPL Version 2, indicate your decision by adding
- * "[Contributor] elects to include this software in this distribution
- * under the [CDDL or GPL Version 2] license." If you do not indicate a
- * single choice of license, a recipient has the option to distribute
- * your version of this file under either the CDDL, the GPL Version 2 or
- * to extend the choice of license to its licensees as provided above.
- * However, if you add GPL Version 2 code and therefore, elected the GPL
- * Version 2 license, then the option applies only if the new code is
- * made subject to such option by the copyright holder.
- *
- * Contributor(s):
- *
- * Portions Copyrighted 2011 Sun Microsystems, Inc.
- * Portions Copyrighted 2015 Everlaw
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
  */
 package netbeanstypescript;
 
@@ -48,13 +26,17 @@ import javax.swing.text.BadLocationException;
 import javax.swing.text.Document;
 import org.netbeans.api.editor.mimelookup.MimeRegistration;
 import org.netbeans.api.lexer.Language;
+import org.netbeans.api.lexer.Token;
 import org.netbeans.api.lexer.TokenHierarchy;
 import org.netbeans.api.lexer.TokenSequence;
-import netbeanstypescript.api.lexer.JsTokenId;
+import netbeanstypescript.lexer.api.JsTokenId;
+import netbeanstypescript.lexer.api.LexUtilities;
+import org.netbeans.spi.editor.bracesmatching.BraceContext;
 import org.netbeans.spi.editor.bracesmatching.BracesMatcher;
 import org.netbeans.spi.editor.bracesmatching.BracesMatcherFactory;
 import org.netbeans.spi.editor.bracesmatching.MatcherContext;
 import org.netbeans.spi.editor.bracesmatching.support.BracesMatcherSupport;
+import org.openide.util.Exceptions;
 
 /**
  *
@@ -80,6 +62,7 @@ public class JsBracesMatcher implements BracesMatcher {
     private char matchingChar;
     private boolean backward;
     private List<TokenSequence<?>> sequences;
+    private boolean templateExp;
 
     public JsBracesMatcher(MatcherContext context, Language<JsTokenId> language) {
         this.context = context;
@@ -90,21 +73,45 @@ public class JsBracesMatcher implements BracesMatcher {
     public int [] findOrigin() throws InterruptedException, BadLocationException {
         ((AbstractDocument) context.getDocument()).readLock();
         try {
-            int [] origin = BracesMatcherSupport.findChar(
-                context.getDocument(),
-                context.getSearchOffset(),
-                context.getLimitOffset(),
-                PAIRS
-            );
+            templateExp = false;
+            int endOffset = -1;
 
-            if (origin != null) {
-                originOffset = origin[0];
-                originChar = PAIRS[origin[1]];
-                matchingChar = PAIRS[origin[1] + origin[2]];
-                backward = origin[2] < 0;
+            TokenSequence<? extends JsTokenId> testSeq = LexUtilities.getJsPositionedSequence(
+                    context.getDocument(), context.getSearchOffset());
+            if (testSeq != null) {
+                if (testSeq.token().id() != JsTokenId.TEMPLATE_EXP_BEGIN && context.isSearchingBackward()) {
+                    if (!testSeq.movePrevious() && context.getSearchOffset() - 1 >= context.getLimitOffset()) {
+                        testSeq = LexUtilities.getJsPositionedSequence(
+                                context.getDocument(), context.getSearchOffset() - 1);
+                    }
+                }
+            }
+            if (testSeq != null && testSeq.token().id() == JsTokenId.TEMPLATE_EXP_BEGIN) {
+                originOffset = testSeq.offset();
+                endOffset = originOffset + testSeq.token().length();
+                originChar = '{'; // NOI18N
+                matchingChar = '}'; // NOI18N
+                backward = false;
+            } else {
+                int[] origin = BracesMatcherSupport.findChar(
+                        context.getDocument(),
+                        context.getSearchOffset(),
+                        context.getLimitOffset(),
+                        PAIRS
+                );
+                if (origin != null) {
+                    originOffset = origin[0];
+                    endOffset = originOffset + 1;
+                    originChar = PAIRS[origin[1]];
+                    matchingChar = PAIRS[origin[1] + origin[2]];
+                    backward = origin[2] < 0;
+                }
+            }
 
+            if (endOffset > 0) {
                 TokenHierarchy<Document> th = TokenHierarchy.get(context.getDocument());
-                sequences = getEmbeddedTokenSequences(th, originOffset, backward, language);
+                // to get it work, there should not be checked previous ts. it can be different. see issue #250521
+                sequences = getEmbeddedTokenSequences(th, originOffset, false, language);
 
                 if (!sequences.isEmpty()) {
                     // Check special tokens
@@ -119,10 +126,14 @@ public class JsBracesMatcher implements BracesMatcher {
                                 || seq.token().id() == JsTokenId.STRING) {
                             return null;
                         }
+                        if (seq.token().id() == JsTokenId.TEMPLATE_EXP_BEGIN
+                                || seq.token().id() == JsTokenId.TEMPLATE_EXP_END) {
+                            templateExp = true;
+                        }
                     }
                 }
 
-                return new int [] { originOffset, originOffset + 1 };
+                return new int [] { originOffset, endOffset };
             } else {
                 return null;
             }
@@ -135,7 +146,7 @@ public class JsBracesMatcher implements BracesMatcher {
     public int [] findMatches() throws InterruptedException, BadLocationException {
         ((AbstractDocument) context.getDocument()).readLock();
         try {
-            if (!sequences.isEmpty()) {
+            if (sequences != null && !sequences.isEmpty()) {
                 TokenSequence<?> seq = sequences.get(sequences.size() - 1);
 
                 TokenHierarchy<Document> th = TokenHierarchy.get(context.getDocument());
@@ -143,11 +154,24 @@ public class JsBracesMatcher implements BracesMatcher {
                 if (backward) {
                     list = th.tokenSequenceList(seq.languagePath(), 0, originOffset);
                 } else {
-                    list = th.tokenSequenceList(seq.languagePath(), originOffset + 1, context.getDocument().getLength());
+                    int offset = originOffset + 1;
+                    if (templateExp) {
+                        offset++;
+                    }
+                    list = th.tokenSequenceList(seq.languagePath(), offset, context.getDocument().getLength());
                 }
 
                 JsTokenId originId = getTokenId(originChar);
                 JsTokenId lookingForId = getTokenId(matchingChar);
+                if (templateExp) {
+                    if (originChar == '}') { // NOI18N
+                        originId = JsTokenId.TEMPLATE_EXP_END;
+                        lookingForId = JsTokenId.TEMPLATE_EXP_BEGIN;
+                    } else {
+                        originId = JsTokenId.TEMPLATE_EXP_BEGIN;
+                        lookingForId = JsTokenId.TEMPLATE_EXP_END;
+                    }
+                }
                 int counter = 0;
 
                 for(TokenSequenceIterator tsi = new TokenSequenceIterator(list, backward); tsi.hasMore(); ) {

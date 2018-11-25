@@ -1,53 +1,37 @@
 /*
- * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
+ * Adapted from NetBeans 10.0; modified for nbts
  *
- * Copyright 2011 Oracle and/or its affiliates. All rights reserved.
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
- * Oracle and Java are registered trademarks of Oracle and/or its affiliates.
- * Other names may be trademarks of their respective owners.
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * The contents of this file are subject to the terms of either the GNU
- * General Public License Version 2 only ("GPL") or the Common Development and
- * Distribution License("CDDL") (collectively, the "License"). You may not use
- * this file except in compliance with the License. You can obtain a copy of
- * the License at http://www.netbeans.org/cddl-gplv2.html or
- * nbbuild/licenses/CDDL-GPL-2-CP. See the License for the specific language
- * governing permissions and limitations under the License. When distributing
- * the software, include this License Header Notice in each file and include
- * the License file at nbbuild/licenses/CDDL-GPL-2-CP. Oracle designates this
- * particular file as subject to the "Classpath" exception as provided by
- * Oracle in the GPL Version 2 section of the License file that accompanied
- * this code. If applicable, add the following below the License Header, with
- * the fields enclosed by brackets [] replaced by your own identifying
- * information: "Portions Copyrighted [year] [name of copyright owner]"
- *
- * If you wish your version of this file to be governed by only the CDDL or
- * only the GPL Version 2, indicate your decision by adding "[Contributor]
- * elects to include this software in this distribution under the [CDDL or GPL
- * Version 2] license." If you do not indicate a single choice of license, a
- * recipient has the option to distribute your version of this file under
- * either the CDDL, the GPL Version 2 or to extend the choice of license to its
- * licensees as provided above. However, if you add GPL Version 2 code and
- * therefore, elected the GPL Version 2 license, then the option applies only
- * if the new code is made subject to such option by the copyright holder.
- *
- * Contributor(s):
- *
- * Portions Copyrighted 2011 Sun Microsystems, Inc.
- * Portions Copyrighted 2015 Everlaw
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
  */
-package netbeanstypescript.api.lexer;
+package netbeanstypescript.lexer.api;
 
 import java.util.Collection;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.Map;
-import netbeanstypescript.lexer.JsDocumentationTokenId;
+//import org.netbeans.api.html.lexer.HTMLTokenId;
 import org.netbeans.api.lexer.InputAttributes;
 import org.netbeans.api.lexer.Language;
 import org.netbeans.api.lexer.LanguagePath;
 import org.netbeans.api.lexer.Token;
 import org.netbeans.api.lexer.TokenId;
+//import org.netbeans.modules.javascript2.lexer.JsLexer;
+//import org.netbeans.modules.javascript2.lexer.JsonLexer;
 import org.netbeans.spi.lexer.LanguageEmbedding;
 import org.netbeans.spi.lexer.LanguageHierarchy;
 import org.netbeans.spi.lexer.Lexer;
@@ -81,14 +65,20 @@ public enum JsTokenId implements TokenId {
     WHITESPACE(null, "whitespace"), // NOI18N
     EOL(null, "whitespace"), // NOI18N
 
-    LINE_COMMENT(null, "comment"), // NOI18N
+    LINE_COMMENT(null, "comment-line"), // NOI18N
     BLOCK_COMMENT(null, "comment"), // NOI18N
     DOC_COMMENT(null, "comment"), // NOI18N
 
     STRING_BEGIN(null, "string"), // NOI18N
     STRING(null, "string"), // NOI18N
-    STRING_TEMPLATE(null, "string"), // NOI18N
     STRING_END(null, "string"), // NOI18N
+    
+    TEMPLATE_BEGIN(null, "string"), // NOI18N
+    TEMPLATE(null, "string"), // NOI18N
+    TEMPLATE_END(null, "string"), // NOI18N
+    
+    TEMPLATE_EXP_BEGIN(null, "separator"), // NOI18N
+    TEMPLATE_EXP_END(null, "separator"), // NOI18N
 
     REGEXP_BEGIN(null, "mod-regexp"), // NOI18N
     REGEXP(null, "mod-regexp"), // NOI18N
@@ -104,7 +94,7 @@ public enum JsTokenId implements TokenId {
     OPERATOR_SEMICOLON(";", "separator"), // NOI18N
     OPERATOR_COMMA(",", "separator"), // NOI18N
     OPERATOR_DOT(".", "separator"), // NOI18N
-    OPERATOR_DOT_DOT_DOT("...", "operator"), // NOI18N
+    OPERATOR_REST("...", "separator"), // NOI18N
     OPERATOR_ASSIGNMENT("=", "operator"), // NOI18N
     OPERATOR_GREATER(">", "operator"), // NOI18N
     OPERATOR_LOWER("<", "operator"), // NOI18N
@@ -124,6 +114,7 @@ public enum JsTokenId implements TokenId {
     OPERATOR_DECREMENT("--", "operator"), // NOI18N
     OPERATOR_PLUS("+", "operator"), // NOI18N
     OPERATOR_MINUS("-", "operator"), // NOI18N
+    OPERATOR_EXPONENTIATION("**", "operator"), // NOI18N
     OPERATOR_MULTIPLICATION("*", "operator"), // NOI18N
     OPERATOR_DIVISION("/", "operator"), // NOI18N
     OPERATOR_BITWISE_AND("&", "operator"), // NOI18N
@@ -135,6 +126,7 @@ public enum JsTokenId implements TokenId {
     OPERATOR_RIGHT_SHIFT(">>>", "operator"), // NOI18N
     OPERATOR_PLUS_ASSIGNMENT("+=", "operator"), // NOI18N
     OPERATOR_MINUS_ASSIGNMENT("-=", "operator"), // NOI18N
+    OPERATOR_EXPONENTIATION_ASSIGNMENT("**=", "operator"), // NOI18N
     OPERATOR_MULTIPLICATION_ASSIGNMENT("*=", "operator"), // NOI18N
     OPERATOR_DIVISION_ASSIGNMENT("/=", "operator"), // NOI18N
     OPERATOR_BITWISE_AND_ASSIGNMENT("&=", "operator"), // NOI18N
@@ -144,7 +136,8 @@ public enum JsTokenId implements TokenId {
     OPERATOR_LEFT_SHIFT_ARITHMETIC_ASSIGNMENT("<<=", "operator"), // NOI18N
     OPERATOR_RIGHT_SHIFT_ARITHMETIC_ASSIGNMENT(">>=", "operator"), // NOI18N
     OPERATOR_RIGHT_SHIFT_ASSIGNMENT(">>>=", "operator"), // NOI18N
-    OPERATOR_AT("@", "operator"), // NOI18N
+    OPERATOR_ARROW("=>", "operator"),
+    OPERATOR_AT("@", "operator"),
     OPERATOR_LESS_THAN_SLASH("</", "operator"), // NOI18N
 
     KEYWORD_BREAK("break", "keyword"), // NOI18N
@@ -174,14 +167,15 @@ public enum JsTokenId implements TokenId {
     KEYWORD_WHILE("while", "keyword"), // NOI18N
     KEYWORD_WITH("with", "keyword"), // NOI18N
 
-    RESERVED_CLASS("class", "keyword"), // NOI18N
-    RESERVED_CONST("const", "keyword"), // NOI18N
+    KEYWORD_CLASS("class", "keyword"), // NOI18N
+    KEYWORD_CONST("const", "keyword"), // NOI18N
+    KEYWORD_EXTENDS("extends", "keyword"), // NOI18N
+    KEYWORD_EXPORT("export", "keyword"), // NOI18N
+    KEYWORD_IMPORT("import", "keyword"), // NOI18N
+    KEYWORD_SUPER("super", "keyword"), // NOI18N
+    KEYWORD_YIELD("yield", "keyword"), // NOI18N
+    
     RESERVED_ENUM("enum", "keyword"), // NOI18N
-    RESERVED_EXPORT("export", "keyword"), // NOI18N
-    RESERVED_EXTENDS("extends", "keyword"), // NOI18N
-    RESERVED_IMPORT("import", "keyword"), // NOI18N
-    RESERVED_SUPER("super", "keyword"), // NOI18N
-
     RESERVED_IMPLEMENTS("implements", "keyword"), // NOI18N
     RESERVED_INTERFACE("interface", "keyword"), // NOI18N
     RESERVED_LET("let", "keyword"), // NOI18N
@@ -190,14 +184,14 @@ public enum JsTokenId implements TokenId {
     RESERVED_PROTECTED("protected", "keyword"), // NOI18N
     RESERVED_PUBLIC("public", "keyword"), // NOI18N
     RESERVED_STATIC("static", "keyword"), // NOI18N
-    RESERVED_YIELD("yield", "keyword"), // NOI18N
+    
+    RESERVED_AWAIT("await", "keyword"), //NOI18N
 
     // non-highlighted keywords: constructor, get, require, set
     TYPESCRIPT_ABSTRACT("abstract", "keyword"), // NOI18N
     TYPESCRIPT_ANY("any", "keyword"), // NOI18N
     TYPESCRIPT_AS("as", "keyword"), // NOI18N
     TYPESCRIPT_ASYNC("async", "keyword"), // NOI18N
-    TYPESCRIPT_AWAIT("await", "keyword"), // NOI18N
     TYPESCRIPT_BOOLEAN("boolean", "keyword"), // NOI18N
     TYPESCRIPT_DECLARE("declare", "keyword"), // NOI18N
     TYPESCRIPT_FROM("from", "keyword"), // NOI18N
@@ -217,16 +211,37 @@ public enum JsTokenId implements TokenId {
 
     KEYWORD_TRUE("true", "keyword"), // NOI18N
     KEYWORD_FALSE("false", "keyword"), // NOI18N
-    KEYWORD_NULL("null", "keyword"); // NOI18N
-
+    KEYWORD_NULL("null", "keyword"), // NOI18N
+    
+    JSX_EXP_BEGIN(null, "separator"), // NOI18N
+    JSX_EXP_END(null, "separator"), // NOI18N
+    
+    JSX_TEXT(null, "jsx_text"); //NOI18N
+    
+    // JavaScript mimetypes
     //public static final String JAVASCRIPT_MIME_TYPE = "text/javascript"; // NOI18N
     public static final String JAVASCRIPT_MIME_TYPE = "text/typescript"; // NOI18N
+    /*
+    public static final String GULP_MIME_TYPE = "text/gulp+javascript"; // NOI18N
+    public static final String GRUNT_MIME_TYPE = "text/grunt+javascript"; // NOI18N
+    public static final String KARMACONF_MIME_TYPE = "text/karmaconf+javascript"; // NOI18N
 
-    //public static final String JSON_MIME_TYPE = "text/x-json"; // NOI18N
-
+    // JSON mimetypes
+    public static final String JSON_MIME_TYPE = "text/x-json"; // NOI18N
+    public static final String PACKAGE_JSON_MIME_TYPE = "text/package+x-json"; // NOI18N
+    public static final String BOWER_JSON_MIME_TYPE = "text/bower+x-json"; // NOI18N
+    public static final String BOWERRC_JSON_MIME_TYPE = "text/bowerrc+x-json"; // NOI18N
+    public static final String JSHINTRC_JSON_MIME_TYPE = "text/jshintrc+x-json"; // NOI18N
+    */
+    private static final String JSON_MIME_TYPE_END = "x-json";  //NOI18N
+    
     private final String fixedText;
 
     private final String primaryCategory;
+    
+    public static boolean isJSONBasedMimeType(String mimeType) {
+        return (mimeType != null && mimeType.endsWith(JSON_MIME_TYPE_END));
+    }
 
     JsTokenId(String fixedText, String primaryCategory) {
         this.fixedText = fixedText;
@@ -282,13 +297,16 @@ public enum JsTokenId implements TokenId {
 
                     if (id == DOC_COMMENT || id == BLOCK_COMMENT) {
                         return LanguageEmbedding.create(JsDocumentationTokenId.language(), 0, 0);
+                    //} else if (id == JSX_TEXT || id == JSX_EXP_BEGIN || id == JSX_EXP_END) {
+                    //    return LanguageEmbedding.create(HTMLTokenId.language(), 0, 0, true);
                     }
 
                     return null; // No embedding
                 }
             }.language();
 
-    /*private static final Language<JsTokenId> JSON_LANGUAGE =
+    /*
+    private static final Language<JsTokenId> JSON_LANGUAGE =
             new LanguageHierarchy<JsTokenId>() {
                 @Override
                 protected String mimeType() {
