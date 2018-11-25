@@ -1,49 +1,24 @@
 /*
- * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
+ * Adapted from NetBeans 10.0; modified for nbts
  *
- * Copyright 1997-2010 Oracle and/or its affiliates. All rights reserved.
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
- * Oracle and Java are registered trademarks of Oracle and/or its affiliates.
- * Other names may be trademarks of their respective owners.
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * The contents of this file are subject to the terms of either the GNU
- * General Public License Version 2 only ("GPL") or the Common
- * Development and Distribution License("CDDL") (collectively, the
- * "License"). You may not use this file except in compliance with the
- * License. You can obtain a copy of the License at
- * http://www.netbeans.org/cddl-gplv2.html
- * or nbbuild/licenses/CDDL-GPL-2-CP. See the License for the
- * specific language governing permissions and limitations under the
- * License.  When distributing the software, include this License Header
- * Notice in each file and include the License file at
- * nbbuild/licenses/CDDL-GPL-2-CP.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the GPL Version 2 section of the License file that
- * accompanied this code. If applicable, add the following below the
- * License Header, with the fields enclosed by brackets [] replaced by
- * your own identifying information:
- * "Portions Copyrighted [year] [name of copyright owner]"
- *
- * Contributor(s):
- *
- * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
- * Microsystems, Inc. All Rights Reserved.
- *
- * If you wish your version of this file to be governed by only the CDDL
- * or only the GPL Version 2, indicate your decision by adding
- * "[Contributor] elects to include this software in this distribution
- * under the [CDDL or GPL Version 2] license." If you do not indicate a
- * single choice of license, a recipient has the option to distribute
- * your version of this file under either the CDDL, the GPL Version 2 or
- * to extend the choice of license to its licensees as provided above.
- * However, if you add GPL Version 2 code and therefore, elected the GPL
- * Version 2 license, then the option applies only if the new code is
- * made subject to such option by the copyright holder.
- *
- * Portions Copyrighted 2015 Everlaw
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
  */
-package netbeanstypescript.api.lexer;
+package netbeanstypescript.lexer.api;
 
 import java.util.Arrays;
 import java.util.List;
@@ -58,12 +33,8 @@ import org.netbeans.api.lexer.Token;
 import org.netbeans.api.lexer.TokenHierarchy;
 import org.netbeans.api.lexer.TokenId;
 import org.netbeans.api.lexer.TokenSequence;
-import org.netbeans.editor.BaseDocument;
-import org.netbeans.editor.Utilities;
-import netbeanstypescript.lexer.JsDocumentationTokenId;
-//import org.netbeans.modules.javascript2.editor.parser.JsParserResult;
+import org.netbeans.modules.csl.spi.ParserResult;
 import org.netbeans.modules.parsing.api.Snapshot;
-import org.openide.util.Exceptions;
 
 
 /**
@@ -124,6 +95,9 @@ public final class LexUtilities {
     @CheckForNull
     public static <K> TokenSequence<? extends K> getTokenSequence(TokenHierarchy<?> th,
             int offset, Language<? extends K> language) {
+        if (th == null) {
+            return null;
+        }
         TokenSequence<? extends K> ts = th.tokenSequence(language);
 
         if (ts == null) {
@@ -158,7 +132,20 @@ public final class LexUtilities {
     /** Find the NEXT JavaScript sequence in the buffer starting from the given offset */
     @SuppressWarnings("unchecked")
     public static TokenSequence<? extends JsTokenId> getNextJsTokenSequence(Document doc, int fromOffset, int max, Language<JsTokenId> language) {
-        TokenHierarchy<Document> th = TokenHierarchy.get(doc);
+        TokenHierarchy<?> th = TokenHierarchy.get(doc);
+        return getNextJsTokenSequence(th, fromOffset, max, language);
+    }
+    
+    /** Find the NEXT JavaScript sequence in the buffer starting from the given offset */
+    @SuppressWarnings("unchecked")
+    public static TokenSequence<? extends JsTokenId> getNextJsTokenSequence(Snapshot snapshot, int fromOffset, int max, Language<JsTokenId> language) {
+        TokenHierarchy<?> th = snapshot.getTokenHierarchy();
+        return getNextJsTokenSequence(th, fromOffset, max, language);
+    }
+
+    /** Find the NEXT JavaScript sequence in the buffer starting from the given offset */
+    @SuppressWarnings("unchecked")
+    public static TokenSequence<? extends JsTokenId> getNextJsTokenSequence(TokenHierarchy<?> th, int fromOffset, int max, Language<JsTokenId> language) {
         TokenSequence<?> ts = th.tokenSequence();
         ts.move(fromOffset);
 
@@ -295,66 +282,6 @@ public final class LexUtilities {
         return balance;
     }
 
-    /**
-     * Return true iff the line for the given offset is a JavaScript comment line.
-     * This will return false for lines that contain comments (even when the
-     * offset is within the comment portion) but also contain code.
-     */
-    public static boolean isCommentOnlyLine(BaseDocument doc, int offset, Language<JsTokenId> language)
-            throws BadLocationException {
-
-        int begin = Utilities.getRowFirstNonWhite(doc, offset);
-
-        if (begin == -1) {
-            return false; // whitespace only
-        }
-
-        Token<? extends JsTokenId> token = LexUtilities.getToken(doc, begin, language);
-        if (token != null) {
-            return token.id() == JsTokenId.LINE_COMMENT;
-        }
-
-        return false;
-    }
-
-    /** Compute the balance of begin/end tokens on the line */
-    public static int getLineBalance(BaseDocument doc, int offset, TokenId up, TokenId down) {
-        try {
-            int begin = Utilities.getRowStart(doc, offset);
-            int end = Utilities.getRowEnd(doc, offset);
-
-            TokenSequence<? extends JsTokenId> ts = LexUtilities.getJsTokenSequence(doc, begin);
-            if (ts == null) {
-                return 0;
-            }
-
-            ts.move(begin);
-
-            if (!ts.moveNext()) {
-                return 0;
-            }
-
-            int balance = 0;
-
-            do {
-                Token<? extends JsTokenId> token = ts.token();
-                TokenId id = token.id();
-
-                if (id == up) {
-                    balance++;
-                } else if (id == down) {
-                    balance--;
-                }
-            } while (ts.moveNext() && (ts.offset() <= end));
-
-            return balance;
-        } catch (BadLocationException ble) {
-            Exceptions.printStackTrace(ble);
-
-            return 0;
-        }
-    }
-
     public static TokenSequence<? extends JsTokenId> getPositionedSequence(
             Document doc, int offset, Language<JsTokenId> language) {
         return getPositionedSequence(doc, offset, true, language);
@@ -403,11 +330,11 @@ public final class LexUtilities {
         return null;
     }
     
-    public static int getLexerOffset(/*JsParserResult*/org.netbeans.modules.parsing.spi.Parser.Result info, int astOffset) {
+    public static int getLexerOffset(ParserResult info, int astOffset) {
         return info.getSnapshot().getOriginalOffset(astOffset);
     }
     
-    public static OffsetRange getLexerOffsets(/*JsParserResult*/org.netbeans.modules.parsing.spi.Parser.Result info, OffsetRange astRange) {
+    public static OffsetRange getLexerOffsets(ParserResult info, OffsetRange astRange) {
         int rangeStart = astRange.getStart();
         int start = info.getSnapshot().getOriginalOffset(rangeStart);
         if (start == rangeStart) {

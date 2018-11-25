@@ -1,44 +1,22 @@
 /*
- * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
+ * Adapted from NetBeans 10.0; modified for nbts
  *
- * Copyright 2011 Oracle and/or its affiliates. All rights reserved.
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
  *
- * Oracle and Java are registered trademarks of Oracle and/or its affiliates.
- * Other names may be trademarks of their respective owners.
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * The contents of this file are subject to the terms of either the GNU
- * General Public License Version 2 only ("GPL") or the Common
- * Development and Distribution License("CDDL") (collectively, the
- * "License"). You may not use this file except in compliance with the
- * License. You can obtain a copy of the License at
- * http://www.netbeans.org/cddl-gplv2.html
- * or nbbuild/licenses/CDDL-GPL-2-CP. See the License for the
- * specific language governing permissions and limitations under the
- * License.  When distributing the software, include this License Header
- * Notice in each file and include the License file at
- * nbbuild/licenses/CDDL-GPL-2-CP.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the GPL Version 2 section of the License file that
- * accompanied this code. If applicable, add the following below the
- * License Header, with the fields enclosed by brackets [] replaced by
- * your own identifying information:
- * "Portions Copyrighted [year] [name of copyright owner]"
- *
- * If you wish your version of this file to be governed by only the CDDL
- * or only the GPL Version 2, indicate your decision by adding
- * "[Contributor] elects to include this software in this distribution
- * under the [CDDL or GPL Version 2] license." If you do not indicate a
- * single choice of license, a recipient has the option to distribute
- * your version of this file under either the CDDL, the GPL Version 2 or
- * to extend the choice of license to its licensees as provided above.
- * However, if you add GPL Version 2 code and therefore, elected the GPL
- * Version 2 license, then the option applies only if the new code is
- * made subject to such option by the copyright holder.
- *
- * Contributor(s):
- *
- * Portions Copyrighted 2011 Sun Microsystems, Inc.
- * Portions Copyrighted 2015 Everlaw
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
  */
 package netbeanstypescript;
 
@@ -56,8 +34,8 @@ import org.netbeans.editor.Utilities;
 import org.netbeans.modules.csl.api.EditorOptions;
 import org.netbeans.modules.csl.api.OffsetRange;
 import org.netbeans.modules.csl.spi.GsfUtilities;
-import netbeanstypescript.api.lexer.JsTokenId;
-import netbeanstypescript.api.lexer.LexUtilities;
+import netbeanstypescript.lexer.api.JsTokenId;
+import netbeanstypescript.lexer.api.LexUtilities;
 import netbeanstypescript.options.OptionsUtils;
 import org.netbeans.spi.editor.typinghooks.TypedTextInterceptor;
 
@@ -72,8 +50,11 @@ public class JsTypedTextInterceptor implements TypedTextInterceptor {
     private static final TokenId[] REGEXP_TOKENS = { JsTokenId.REGEXP, JsTokenId.REGEXP_END };
 
     /** Tokens which indicate that we're within a literal string */
-    private final static TokenId[] STRING_TOKENS = { JsTokenId.STRING, JsTokenId.STRING_TEMPLATE, JsTokenId.STRING_END };
+    private final static TokenId[] STRING_TOKENS = { JsTokenId.STRING, JsTokenId.STRING_END };
 
+    /** Tokens which indicate that we're within a template string */
+    private final static TokenId[] TEMPLATE_TOKENS = { JsTokenId.TEMPLATE, JsTokenId.TEMPLATE_END };
+    
     private final Language<JsTokenId> language;
 
     private final boolean singleQuote;
@@ -212,7 +193,7 @@ public class JsTypedTextInterceptor implements TypedTextInterceptor {
         boolean isTemplate = GsfUtilities.isCodeTemplateEditing(doc);
 
         if (selection != null && selection.length() > 0) {    
-            if (!isTemplate && (((ch == '"' || ch == '\'') && isSmartQuotingEnabled())
+            if (!isTemplate && (((ch == '"' || ch == '\'' || ch == '`') && isSmartQuotingEnabled())
                     || ((ch == '(' || ch == '{' || ch == '[')) && isInsertMatchingEnabled())) {
                     // Bracket the selection
                     char firstChar = selection.charAt(0);
@@ -227,7 +208,7 @@ public class JsTypedTextInterceptor implements TypedTextInterceptor {
                             int lastChar = selection.charAt(selection.length()-1);
                             // Replace the surround-with chars?
                             if (selection.length() > 1 &&
-                                    ((firstChar == '"' || firstChar == '\'' || firstChar == '(' ||
+                                    ((firstChar == '"' || firstChar == '\'' || firstChar == '`' || firstChar == '(' ||
                                     firstChar == '{' || firstChar == '[' || firstChar == '/') &&
                                     lastChar == matching(firstChar))) {
                                 String innerText = selection.substring(1, selection.length() - 1);
@@ -267,6 +248,9 @@ public class JsTypedTextInterceptor implements TypedTextInterceptor {
         if (ch == '\"' || (ch == '\'' && singleQuote)) {
             stringTokens = STRING_TOKENS;
             beginTokenId = JsTokenId.STRING_BEGIN;
+        } else if (ch == '`' && singleQuote) {
+            stringTokens = TEMPLATE_TOKENS;
+            beginTokenId = JsTokenId.TEMPLATE_BEGIN;
         } else if (id.isError()) {
             ts.movePrevious();
 
@@ -274,6 +258,9 @@ public class JsTypedTextInterceptor implements TypedTextInterceptor {
 
             if (isCompletableStringBoundary(ts.token(), singleQuote, false)) {
                 stringTokens = STRING_TOKENS;
+                beginTokenId = prevId;
+            } else if (isCompletableTemplateBoundary(ts.token(), singleQuote, false)) {
+                stringTokens = TEMPLATE_TOKENS;
                 beginTokenId = prevId;
             } else if (prevId == JsTokenId.REGEXP_BEGIN) {
                 stringTokens = REGEXP_TOKENS;
@@ -285,10 +272,20 @@ public class JsTypedTextInterceptor implements TypedTextInterceptor {
                 stringTokens = STRING_TOKENS;
                 beginTokenId = id;
             }
+        } else if (isCompletableTemplateBoundary(token, singleQuote, false) &&
+                (caretOffset == (ts.offset() + 1))) {
+            if (!Character.isLetter(ch)) { // %q, %x, etc. Only %[], %!!, %<space> etc. is allowed
+                stringTokens = TEMPLATE_TOKENS;
+                beginTokenId = id;
+            }
         } else if ((isCompletableStringBoundary(token, singleQuote, false) && (caretOffset == (ts.offset() + 2))) ||
                 isCompletableStringBoundary(token, singleQuote, true)) {
             stringTokens = STRING_TOKENS;
             beginTokenId = JsTokenId.STRING_BEGIN;
+        } else if ((isCompletableTemplateBoundary(token, singleQuote, false) && (caretOffset == (ts.offset() + 2))) ||
+                isCompletableTemplateBoundary(token, singleQuote, true)) {
+            stringTokens = TEMPLATE_TOKENS;
+            beginTokenId = JsTokenId.TEMPLATE_BEGIN;
         } else if (((id == JsTokenId.REGEXP_BEGIN) && (caretOffset == (ts.offset() + 2))) ||
                 (id == JsTokenId.REGEXP_END)) {
             stringTokens = REGEXP_TOKENS;
@@ -380,7 +377,7 @@ public class JsTypedTextInterceptor implements TypedTextInterceptor {
     private void completeQuote(MutableContext context, char bracket,
             TokenId[] stringTokens, TokenId beginToken, boolean isTemplate) throws BadLocationException {
         if (isTemplate) {
-            if (bracket == '"' || bracket == '\'' || bracket == '(' || bracket == '{' || bracket == '[') {
+            if (bracket == '"' || bracket == '\'' || bracket == '`' || bracket == '(' || bracket == '{' || bracket == '[') {
                 String text = context.getText() + matching(bracket);
                 context.setText(text, text.length() - 1);
             }
@@ -472,7 +469,7 @@ public class JsTypedTextInterceptor implements TypedTextInterceptor {
                 if ((dotPos - 1) > 0) {
                     token = LexUtilities.getToken(doc, dotPos - 1, language);
                     // XXX TODO use language embedding to handle this
-                    insideString = (token.id() == JsTokenId.STRING);
+                    insideString = (token.id() == JsTokenId.STRING || token.id() == JsTokenId.TEMPLATE);
                 }
             }
         }
@@ -515,7 +512,7 @@ public class JsTypedTextInterceptor implements TypedTextInterceptor {
             // test that we are in front of ) , " or '
             char chr = doc.getChars(dotPos, 1)[0];
 
-            return ((chr == ')') || (chr == ',') || (chr == '\"') || (chr == '\'') || (chr == ' ') ||
+            return ((chr == ')') || (chr == ',') || (chr == '\"') || (chr == '\'') || (chr == '`') || (chr == ' ') ||
             (chr == ']') || (chr == '}') || (chr == '\n') || (chr == '\t') || (chr == ';'));
         }
     }
@@ -784,6 +781,9 @@ public class JsTypedTextInterceptor implements TypedTextInterceptor {
 
         case '\'':
             return '\'';
+            
+        case '`':
+            return '`';
 
         case '{':
             return '}';
@@ -803,6 +803,15 @@ public class JsTypedTextInterceptor implements TypedTextInterceptor {
             if (singleQuote || "\"".equals(token.text().toString())) {
                 return true;
             }
+        }
+        return false;
+    }
+    
+    private static boolean isCompletableTemplateBoundary(Token<? extends JsTokenId> token,
+            boolean singleQuote, boolean end) {
+        if ((!end && token.id() == JsTokenId.TEMPLATE_BEGIN)
+                || (end && token.id() == JsTokenId.TEMPLATE_END)) {
+            return singleQuote;
         }
         return false;
     }
