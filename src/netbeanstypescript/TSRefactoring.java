@@ -18,6 +18,7 @@ package netbeanstypescript;
 import java.awt.Component;
 import java.awt.Dimension;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import javax.swing.Box;
@@ -34,6 +35,7 @@ import org.json.simple.JSONObject;
 import org.netbeans.lib.editor.util.StringEscapeUtils;
 import org.netbeans.modules.csl.spi.GsfUtilities;
 import org.netbeans.modules.csl.spi.support.ModificationResult;
+import org.netbeans.modules.csl.spi.support.ModificationResult.Difference;
 import org.netbeans.modules.refactoring.api.*;
 import org.netbeans.modules.refactoring.spi.*;
 import org.netbeans.modules.refactoring.spi.ui.*;
@@ -42,12 +44,15 @@ import org.openide.NotifyDescriptor;
 import org.openide.awt.Mnemonics;
 import org.openide.cookies.EditorCookie;
 import org.openide.filesystems.FileObject;
+import org.openide.nodes.Node;
 import org.openide.text.CloneableEditorSupport;
 import org.openide.text.PositionBounds;
 import org.openide.text.PositionRef;
 import org.openide.util.HelpCtx;
 import org.openide.util.Lookup;
+import org.openide.util.lookup.Lookups;
 import org.openide.util.lookup.ServiceProvider;
+import org.openide.windows.TopComponent;
 
 /**
  *
@@ -56,15 +61,27 @@ import org.openide.util.lookup.ServiceProvider;
 @ServiceProvider(service=ActionsImplementationProvider.class)
 public class TSRefactoring extends ActionsImplementationProvider {
 
+    // Annoying boilerplate to distinguish file actions from document actions
+    public static boolean isFromEditor(EditorCookie ec) {
+        if (ec != null && ec.getOpenedPanes() != null) {
+            TopComponent activetc = TopComponent.getRegistry().getActivated();
+            if (activetc instanceof CloneableEditorSupport.Pane) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean isTSFile(FileObject fo) {
+        return fo != null && "text/typescript".equals(fo.getMIMEType());
+    }
+
     @Override
     public boolean canFindUsages(Lookup lookup) {
         EditorCookie cookie = lookup.lookup(EditorCookie.class);
-        if (cookie != null) {
+        if (isFromEditor(cookie)) {
             Document doc = cookie.getDocument();
-            if (doc != null) {
-                FileObject fo = GsfUtilities.findFileObject(doc);
-                return fo != null && "text/typescript".equals(fo.getMIMEType());
-            }
+            return doc != null && isTSFile(GsfUtilities.findFileObject(doc));
         }
         return false;
     }
@@ -176,12 +193,29 @@ public class TSRefactoring extends ActionsImplementationProvider {
 
     @Override
     public boolean canRename(Lookup lookup) {
-        return canFindUsages(lookup);
+        EditorCookie cookie = lookup.lookup(EditorCookie.class);
+        if (isFromEditor(cookie)) {
+            Document doc = cookie.getDocument();
+            return doc != null && isTSFile(GsfUtilities.findFileObject(doc));
+        } else {
+            Collection<? extends Node> nodes = lookup.lookupAll(Node.class);
+            return nodes.size() == 1 &&
+                    isTSFile(nodes.iterator().next().getLookup().lookup(FileObject.class));
+        }
     }
 
     @Override
     public void doRename(Lookup lookup) {
         EditorCookie ec = lookup.lookup(EditorCookie.class);
+        if (isFromEditor(ec)) {
+            rename(ec);
+        } else {
+            Node node = lookup.lookup(Node.class);
+            renameFile(node.getLookup().lookup(FileObject.class));
+        }
+    }
+
+    private void rename(EditorCookie ec) {
         final FileObject fileObj = GsfUtilities.findFileObject(ec.getDocument());
         final int position = ec.getOpenedPanes()[0].getCaretPosition();
 
@@ -194,7 +228,7 @@ public class TSRefactoring extends ActionsImplementationProvider {
             return;
         }
 
-        final RenamePanel panel = new RenamePanel((String) obj.get("displayName"));
+        final RenamePanel panel = new RenamePanel((String) obj.get("displayName"), true);
         final TSRenameRefactoring refactoring = new TSRenameRefactoring(fileObj, position, panel);
         UI.openRefactoringUI(new RefactoringUI() {
             @Override public String getName() {
@@ -220,7 +254,7 @@ public class TSRefactoring extends ActionsImplementationProvider {
         final JCheckBox findInStrings = new JCheckBox();
         final JCheckBox findInComments = new JCheckBox();
 
-        RenamePanel(String oldName) {
+        RenamePanel(String oldName, boolean withOptions) {
             this.oldName = oldName;
             setLayout(new BoxLayout(this, BoxLayout.PAGE_AXIS));
             Box topRow = Box.createHorizontalBox();
@@ -234,10 +268,12 @@ public class TSRefactoring extends ActionsImplementationProvider {
             topRow.add(newName);
             topRow.setAlignmentX(LEFT_ALIGNMENT);
             add(topRow);
-            Mnemonics.setLocalizedText(findInStrings, "Apply Rename on &Strings");
-            add(findInStrings);
-            Mnemonics.setLocalizedText(findInComments, "Apply Rename on &Comments");
-            add(findInComments);
+            if (withOptions) {
+                Mnemonics.setLocalizedText(findInStrings, "Apply Rename on &Strings");
+                add(findInStrings);
+                Mnemonics.setLocalizedText(findInComments, "Apply Rename on &Comments");
+                add(findInComments);
+            }
         }
 
         @Override
@@ -305,6 +341,93 @@ public class TSRefactoring extends ActionsImplementationProvider {
         };
     }
 
+    private void renameFile(final FileObject fileObj) {
+        final RenameRefactoring rr = new RenameRefactoring(Lookups.fixed(fileObj, this));
+        final RenamePanel panel = new RenamePanel(fileObj.getName(), false);
+        UI.openRefactoringUI(new RefactoringUI() {
+            @Override public String getName() {
+                return "Rename file " + fileObj.getNameExt();
+            }
+            @Override public String getDescription() {
+                return "Rename <b>" + StringEscapeUtils.escapeHtml((String) fileObj.getName()) +
+                        "</b> to <b>" + StringEscapeUtils.escapeHtml(panel.newName.getText()) + "</b>";
+            }
+            @Override public boolean isQuery() { return false; }
+            @Override public CustomRefactoringPanel getPanel(ChangeListener cl) { return panel; }
+            @Override public Problem setParameters() {
+                rr.setNewName(panel.newName.getText());
+                return null;
+            }
+            @Override public Problem checkParameters() { return null; }
+            @Override public boolean hasParameters() { return true; }
+            @Override public AbstractRefactoring getRefactoring() { return rr; }
+            @Override public HelpCtx getHelpCtx() { return null; }
+        });
+    }
+
+    private static class TSRenameFilePlugin implements RefactoringPlugin {
+        final RenameRefactoring rr;
+
+        TSRenameFilePlugin(RenameRefactoring rr) {
+            this.rr = rr;
+        }
+
+        @Override public Problem preCheck() { return null; }
+        @Override public Problem checkParameters() { return null; }
+        @Override public Problem fastCheckParameters() { return null; }
+        @Override public void cancelRequest() {}
+        @Override public Problem prepare(RefactoringElementsBag refactoringElements) {
+            FileObject fileObj = rr.getRefactoringSource().lookup(FileObject.class);
+            String newPath = fileObj.getParent().getPath() + "/" + rr.getNewName() + "." + fileObj.getExt();
+            JSONArray arr;
+            try {
+                arr = (JSONArray) TSService.callEx("getEditsForFileRename", fileObj, newPath);
+            } catch (TSService.TSException e) {
+                return new Problem(true, e.getMessage());
+            }
+            ModificationResult modificationResult = new ModificationResult();
+            Problem firstProblem = null, lastProblem = null;
+            for (JSONObject fileTextChanges: (List<JSONObject>) arr) {
+                System.out.println("Edit: " + fileTextChanges);
+                String fileName = (String) fileTextChanges.get("fileName");
+                FileObject changedFile = TSService.findIndexedFileObject(fileName);
+                // 
+                if (Boolean.TRUE.equals(fileTextChanges.get("isNewFile"))) {
+                    
+                }
+                List<Difference> diffs = new ArrayList<>();
+                CloneableEditorSupport editor = GsfUtilities.findCloneableEditorSupport(changedFile);
+                for (JSONObject textChange: (List<JSONObject>) fileTextChanges.get("textChanges")) {
+                    JSONObject span = (JSONObject) textChange.get("span");
+                    int start = ((Number) span.get("start")).intValue();
+                    int length = ((Number) span.get("length")).intValue();
+                    diffs.add(new Difference(Difference.Kind.CHANGE,
+                            editor.createPositionRef(start, Position.Bias.Forward),
+                            editor.createPositionRef(start + length, Position.Bias.Forward),
+                            null, (String) textChange.get("newText")));
+                }
+                modificationResult.addDifferences(changedFile, diffs);
+            }
+            refactoringElements.registerTransaction(new RefactoringCommit(Collections.singletonList(modificationResult)));
+            for (FileObject fo: modificationResult.getModifiedFileObjects()) {
+                for (ModificationResult.Difference diff: modificationResult.getDifferences(fo)) {
+                    refactoringElements.add(rr, DiffElement.create(diff, fo, modificationResult));
+                }
+            }
+            return firstProblem;
+        }
+    }
+
+    @Override
+    public boolean canMove(Lookup lookup) {
+        return super.canMove(lookup);
+    }
+
+    @Override
+    public void doMove(Lookup lookup) {
+        super.doMove(lookup);
+    }
+
     @ServiceProvider(service = RefactoringPluginFactory.class)
     public static class TSRefactoringPluginFactory implements RefactoringPluginFactory {
         @Override
@@ -313,6 +436,10 @@ public class TSRefactoring extends ActionsImplementationProvider {
                 return ((TSWhereUsedQuery) refactoring).new Plugin();
             } else if (refactoring instanceof TSRenameRefactoring) {
                 return ((TSRenameRefactoring) refactoring).new Plugin();
+            } else if (refactoring instanceof RenameRefactoring) {
+                if (refactoring.getRefactoringSource().lookup(TSRefactoring.class) != null) {
+                    return new TSRenameFilePlugin((RenameRefactoring) refactoring);
+                }
             }
             return null;
         }

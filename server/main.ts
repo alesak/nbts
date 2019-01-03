@@ -615,6 +615,12 @@ class Program {
         }
         return this.service.organizeImports({ type: "file", fileName }, formatOptions, void 0);
     }
+    getEditsForFileRename(oldFilePath: string, newFilePath: string) {
+        if (! this.service.getEditsForFileRename) {
+            return "getEditsForFileRename requires TypeScript 2.9\nCurrent version: " + ts.version;
+        }
+        return this.service.getEditsForFileRename(oldFilePath, newFilePath, void 0, void 0);
+    }
 }
 
 var programCache: {[path: string]: Program};
