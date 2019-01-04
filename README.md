@@ -15,7 +15,7 @@ This plugin allows editing of TypeScript code within NetBeans. Many IDE features
 ### Installation
 
 For this plugin to work, you will need:
-* NetBeans 8.0.2 or later
+* NetBeans 8.2 or later
 * Node.js 0.8.0 or later
 * TypeScript 1.5.3 or later
 
