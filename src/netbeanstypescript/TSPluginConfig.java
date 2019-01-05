@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Everlaw
+ * Copyright 2018-2019 Everlaw
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,10 +19,17 @@ import java.awt.BorderLayout;
 import java.awt.Dimension;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Locale;
 import java.util.prefs.Preferences;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import javax.swing.*;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
@@ -51,6 +58,26 @@ public class TSPluginConfig extends BaseAction {
 
     public static String getLibDir() { return PREFS.get("libDir", ""); }
     public static String getLocale() { return PREFS.get("locale", ""); }
+
+    static String inferVersion(String libDir) throws IOException {
+        // Parse typescript.js to guess version
+        // Old:  ts.version = "x.y.z";
+        // 2.5+: ts.versionMajorMinor = "x.y"; ts.version = ts.versionMajorMinor + ".z";
+        Matcher m = Pattern.compile("ts\\.version(\\w*)\\s*=\\s*(?:ts\\.version(\\w*)\\s*\\+\\s*)?\"(.*?)\"").matcher("");
+        try (BufferedReader br = Files.newBufferedReader(Paths.get(libDir + "/typescript.js"))) {
+            HashMap<String, String> vars = new HashMap<>();
+            for (String line; (line = br.readLine()) != null; ) {
+                for (m.reset(line); m.find(); ) {
+                    String dst = m.group(1), src = m.group(2);
+                    vars.put(dst, (src == null ? "" : vars.getOrDefault(src, "<unknown>")) + m.group(3));
+                    if (dst.equals("")) {
+                        return vars.get(dst);
+                    }
+                }
+            }
+        }
+        return "<unknown>";
+    }
 
     @Override
     public void actionPerformed(ActionEvent evt, JTextComponent target) {
@@ -129,7 +156,9 @@ public class TSPluginConfig extends BaseAction {
 
         void update() {
             String dir = dirField.getText();
-            if (! new File(dir + "/typescript.js").exists()) {
+            try {
+                nls.setInformationMessage("TypeScript version: " + inferVersion(dir));
+            } catch (IOException ex) {
                 locale.setEnabled(false);
                 nls.setErrorMessage("Directory must contain typescript.js.");
                 return;
@@ -157,7 +186,6 @@ public class TSPluginConfig extends BaseAction {
             }
             locale.setModel(model);
             locale.setEnabled(true);
-            nls.clearMessages();
         }
 
         static class TSLocale {
