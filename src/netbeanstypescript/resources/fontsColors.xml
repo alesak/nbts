@@ -42,8 +42,8 @@
     <fontcolor name="mod-custom1" foreColor="666666">
         <font style="bold" />
     </fontcolor>
-    <fontcolor name="mod-custom2" default="keyword"/>
 -->
+    <fontcolor name="mod-custom2" default="keyword"/>
     <fontcolor name="mod-class" default="class">
         <font style="bold" />
     </fontcolor>

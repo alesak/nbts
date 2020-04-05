@@ -187,27 +187,14 @@ public enum JsTokenId implements TokenId {
     
     RESERVED_AWAIT("await", "keyword"), //NOI18N
 
-    // non-highlighted keywords: constructor, get, require, set
-    TYPESCRIPT_ABSTRACT("abstract", "keyword"), // NOI18N
-    TYPESCRIPT_ANY("any", "keyword"), // NOI18N
+    // Contextual keywords not handled by the semantic highlighter
     TYPESCRIPT_AS("as", "keyword"), // NOI18N
-    TYPESCRIPT_ASYNC("async", "keyword"), // NOI18N
-    TYPESCRIPT_BOOLEAN("boolean", "keyword"), // NOI18N
-    TYPESCRIPT_DECLARE("declare", "keyword"), // NOI18N
     TYPESCRIPT_FROM("from", "keyword"), // NOI18N
+    TYPESCRIPT_INFER("infer", "keyword"), // NOI18N
     TYPESCRIPT_IS("is", "keyword"), // NOI18N
-    TYPESCRIPT_KEYOF("keyof", "keyword"), // NOI18N
     TYPESCRIPT_MODULE("module", "keyword"), // NOI18N
     TYPESCRIPT_NAMESPACE("namespace", "keyword"), // NOI18N
-    TYPESCRIPT_NEVER("never", "keyword"), // NOI18N
-    TYPESCRIPT_NUMBER("number", "keyword"), // NOI18N
-    TYPESCRIPT_OBJECT("object", "keyword"), // NOI18N
     TYPESCRIPT_OF("of", "keyword"), // NOI18N
-    TYPESCRIPT_READONLY("readonly", "keyword"), // NOI18N
-    TYPESCRIPT_STRING("string", "keyword"), // NOI18N
-    TYPESCRIPT_SYMBOL("symbol", "keyword"), // NOI18N
-    TYPESCRIPT_TYPE("type", "keyword"), // NOI18N
-    TYPESCRIPT_UNDEFINED("undefined", "keyword"), // NOI18N
 
     KEYWORD_TRUE("true", "keyword"), // NOI18N
     KEYWORD_FALSE("false", "keyword"), // NOI18N

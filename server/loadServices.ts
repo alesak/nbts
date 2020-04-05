@@ -29,7 +29,7 @@ function loadServices(dir: string) {
     tsCode = tsCode.replace(new RegExp([
         ' kind: ts\\.SymbolDisplay\\.getSymbolKind\\(typeChecker, symbol, location\\),',
         ' +kindModifiers: ts\\.SymbolDisplay\\.getSymbolModifiers\\(symbol\\),',
-        ' +sortText: "0",'
+        ' +sortText: .*?,'
     ].join('\n')), '$& type: typeChecker.typeToString(typeChecker.getTypeOfSymbolAtLocation(symbol, location)),');
 
     // https://github.com/Microsoft/TypeScript/issues/22467 - In go-to-definition list, distinguish

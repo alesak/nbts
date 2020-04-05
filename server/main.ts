@@ -25,10 +25,11 @@ declare class Set<T> { add(t: T): void; has(t: T): boolean; }
 var version = 0;
 var files: {[name: string]: {version: string; snapshot: SnapshotImpl}} = {};
 var builtinLibs: {[name: string]: string};
+var keywordLengthMap: {[id: string]: number};
 var docRegistry: ts.DocumentRegistry;
 
 var implicitAnyErrors: {[code: number]: boolean} = {};
-[[2602, 2602], [7000, 7026], [7031, 7034]].forEach(([lo, hi]) => {
+[[2602, 2602], [7000, 7026], [7031, 7034], [7051, 7055]].forEach(([lo, hi]) => {
     for (var code = lo; code <= hi; code++) {
         implicitAnyErrors[code] = true;
     }
@@ -346,6 +347,10 @@ class Program {
                 }
                 return;
             }
+            if (node.kind > SK.LastFutureReservedWord && node.kind <= SK.LastKeyword) {
+                highlight(node.end - keywordLengthMap[node.kind], node.end, 'CUSTOM2');
+                return;
+            }
             switch (node.kind) {
                 case SK.MethodDeclaration:
                 case SK.FunctionExpression:
@@ -355,10 +360,12 @@ class Program {
                         highlightIdent(node.name, 'METHOD');
                     }
                     break;
+                case SK.TypeAliasDeclaration:
+                    highlight(node.name.pos - 4, node.name.pos, 'CUSTOM2'); // "type" keyword
+                    // fallthrough
                 case SK.ClassExpression:
                 case SK.ClassDeclaration:
                 case SK.InterfaceDeclaration:
-                case SK.TypeAliasDeclaration:
                 case SK.EnumDeclaration:
                 case SK.ModuleDeclaration:
                     // name.kind could be string (external module decl); don't highlight that
@@ -386,6 +393,9 @@ class Program {
                     if (typeInfoResolver.getAliasedSymbol(node.symbol).nbtsDeprecated) {
                         highlightIdent(node.propertyName || node.name, 'DEPRECATED');
                     }
+                    break;
+                case SK.TypeOperator:
+                    highlight(node.type.pos - keywordLengthMap[node.operator], node.type.pos, 'CUSTOM2');
                     break;
             }
             ts.forEachChild(node, walk);
@@ -625,7 +635,7 @@ function clearProgramCache() {
 }
 
 function configure(tsLibDir: string, locale: string) {
-    global.ts = builtinLibs = docRegistry = void 0;
+    global.ts = builtinLibs = keywordLengthMap = docRegistry = void 0;
     programCache = {};
     try {
         loadServices(tsLibDir);
@@ -637,6 +647,18 @@ function configure(tsLibDir: string, locale: string) {
                 builtinLibs["(builtin)/" + libFile] = ts.sys.readFile(tsLibDir + "/" + libFile);
             }
         });
+        // Build ID -> length map of contextual keywords for semantic highlighter.
+        // Note that some keywords have multiple enum names - we want the first-defined name for
+        // each ID, not the last-defined which ts.SyntaxKind[id] contains.
+        const SK = ts.SyntaxKind;
+        keywordLengthMap = {}
+        for (const key in SK) {
+            const id = SK[key];
+            if (typeof id === 'number' && id > SK.LastFutureReservedWord && id <= SK.LastKeyword
+                    && !(id in keywordLengthMap)) {
+                keywordLengthMap[id] = key.length - 7;
+            }
+        }
     } catch (error) { return error.stack; }
 }
 
