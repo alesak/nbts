@@ -190,6 +190,15 @@
                 <attr name="templateWizardURL" urlvalue="nbresloc:/netbeanstypescript/resources/typescript.html"/>
                 <!--<attr name="requireProject" boolvalue="false"/>-->
             </file>
+            <file name="typescript.tsx" url="templatereact">
+                <attr name="displayName" bundlevalue="netbeanstypescript.resources.Bundle#Templates/Other/typescript.tsx"/>
+                <attr name="position" intvalue="460"/>
+                <attr name="template" boolvalue="true"/>
+                <attr name="javax.script.ScriptEngine" stringvalue="freemarker"/>
+                <attr name="templateCategory" stringvalue="simple-files"/>
+                <attr name="templateWizardURL" urlvalue="nbresloc:/netbeanstypescript/resources/typescriptreact.html"/>
+                <!--<attr name="requireProject" boolvalue="false"/>-->
+            </file>
         </folder>
     </folder>
 </filesystem>
